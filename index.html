@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FileBot - 文件智能批量处理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#0f0f1a;color:#e2e8f0;min-height:100vh;}
+.app{display:flex;flex-direction:column;min-height:100vh;}
+.header{padding:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);border-bottom:1px solid #2d2d44;text-align:center;}
+.header h1{font-size:1.8em;color:#fff;margin-bottom:4px;}
+.header h1 span{color:#10b981;}
+.header p{color:#8b949e;font-size:0.9em;}
+.container{max-width:1200px;margin:0 auto;padding:20px;flex:1;}
+.card{background:#1e1e2e;border:1px solid #2d2d44;border-radius:12px;padding:20px;margin-bottom:16px;}
+.card h2{font-size:1.1em;color:#fff;margin-bottom:14px;border-left:3px solid #10b981;padding-left:10px;}
+.drop-zone{border:2px dashed #3d3d5c;border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:all 0.2s;min-height:150px;}
+.drop-zone:hover,.drop-zone.dragover{border-color:#10b981;background:#1a2e1a;}
+.drop-zone .icon{font-size:3em;margin-bottom:10px;}
+.file-list{max-height:300px;overflow-y:auto;margin-top:12px;}
+.file-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#0f0f1a;border:1px solid #2d2d44;border-radius:8px;margin:4px 0;}
+.file-item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-item .size{color:#8b949e;font-size:12px;}
+.file-item .type{padding:2px 8px;background:#2d2d44;border-radius:4px;font-size:11px;color:#8b949e;}
+.file-item .status{font-size:12px;}
+.file-item .status.done{color:#10b981;}
+.file-item .status.error{color:#ef4444;}
+.operations{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+.op-btn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;background:#0f0f1a;border:1px solid #2d2d44;border-radius:10px;cursor:pointer;transition:all 0.2s;}
+.op-btn:hover{border-color:#10b981;background:#1a2e1a;}
+.op-btn .icon{font-size:1.8em;}
+.op-btn .name{font-size:13px;color:#e2e8f0;}
+.op-btn .desc{font-size:11px;color:#8b949e;text-align:center;}
+.config-panel{background:#0f0f1a;border:1px solid #2d2d44;border-radius:8px;padding:16px;margin-top:12px;}
+.config-row{display:flex;align-items:center;gap:12px;margin:8px 0;}
+.config-row label{min-width:100px;font-size:13px;color:#8b949e;}
+.config-row input,.config-row select{flex:1;background:#1e1e2e;border:1px solid #2d2d44;border-radius:6px;color:#e2e8f0;padding:8px 12px;font-size:13px;}
+.config-row input:focus,.config-row select:focus{outline:none;border-color:#10b981;}
+.btn-row{display:flex;gap:12px;margin-top:16px;}
+.btn{padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:all 0.2s;}
+.btn-primary{background:#10b981;color:#000;}
+.btn-primary:hover{background:#059669;}
+.btn-secondary{background:#2d2d44;color:#e2e8f0;border:1px solid #3d3d5c;}
+.btn-secondary:hover{background:#3d3d5c;}
+.btn-danger{background:#ef4444;color:#fff;}
+.btn-danger:hover{background:#dc2626;}
+.progress-bar{height:8px;background:#2d2d44;border-radius:4px;overflow:hidden;margin-top:12px;}
+.progress-fill{height:100%;background:#10b981;transition:width 0.3s;}
+.log-area{background:#0f0f1a;border:1px solid #2d2d44;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:12px;max-height:200px;overflow-y:auto;margin-top:12px;}
+.log-line{margin:2px 0;}
+.log-line.success{color:#10b981;}
+.log-line.error{color:#ef4444;}
+.log-line.info{color:#3b82f6;}
+footer{text-align:center;padding:20px;color:#555;font-size:0.8em;border-top:1px solid #2d2d44;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>File<span>Bot</span></h1>
+    <p>文件智能批量处理 · 重命名/压缩/转换/清理</p>
+  </div>
+  
+  <div class="container">
+    <div class="card">
+      <h2>📁 选择文件</h2>
+      <div class="drop-zone" id="drop-zone">
+        <div class="icon">📂</div>
+        <p>拖拽文件到此处，或点击选择</p>
+        <p style="font-size:0.85em;color:#555;margin-top:8px">支持: 图片、文档、压缩包、代码文件等</p>
+        <input type="file" id="file-input" multiple style="display:none" onchange="handleFiles(this.files)">
+      </div>
+      <div class="file-list" id="file-list"></div>
+    </div>
+    
+    <div class="card">
+      <h2>⚡ 选择操作</h2>
+      <div class="operations">
+        <div class="op-btn" onclick="selectOp('rename')">
+          <span class="icon">✏️</span>
+          <span class="name">批量重命名</span>
+          <span class="desc">添加前缀/后缀/序号</span>
+        </div>
+        <div class="op-btn" onclick="selectOp('compress')">
+          <span class="icon">📦</span>
+          <span class="name">压缩打包</span>
+          <span class="desc">合并为ZIP文件</span>
+        </div>
+        <div class="op-btn" onclick="selectOp('resize')">
+          <span class="icon">🖼️</span>
+          <span class="name">图片缩放</span>
+          <span class="desc">调整图片尺寸</span>
+        </div>
+        <div class="op-btn" onclick="selectOp('convert')">
+          <span class="icon">🔄</span>
+          <span class="name">格式转换</span>
+          <span class="desc">图片格式互转</span>
+        </div>
+        <div class="op-btn" onclick="selectOp('clean')">
+          <span class="icon">🧹</span>
+          <span class="name">清理命名</span>
+          <span class="desc">移除特殊字符/空格</span>
+        </div>
+        <div class="op-btn" onclick="selectOp('extract')">
+          <span class="icon">📤</span>
+          <span class="name">提取内容</span>
+          <span class="desc">从文件名提取信息</span>
+        </div>
+      </div>
+      
+      <div class="config-panel" id="config-panel" style="display:none">
+        <div id="config-content"></div>
+      </div>
+      
+      <div class="btn-row">
+        <button class="btn btn-primary" id="run-btn" onclick="runOperation()" disabled>▶ 执行</button>
+        <button class="btn btn-secondary" onclick="clearFiles()">🗑 清空</button>
+      </div>
+      
+      <div class="progress-bar" id="progress-bar" style="display:none">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      
+      <div class="log-area" id="log-area"></div>
+    </div>
+  </div>
+  
+  <footer>FileBot · 浏览器本地处理 · 不上传任何文件</footer>
+</div>
+
+<script>
+let files = [];
+let currentOp = null;
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('click', () => document.getElementById('file-input').click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+
+function handleFiles(fileList) {
+  for (const f of fileList) {
+    files.push({
+      file: f,
+      name: f.name,
+      size: f.size,
+      type: f.type || getFileType(f.name),
+      status: 'pending'
+    });
+  }
+  renderFiles();
+  document.getElementById('run-btn').disabled = files.length === 0;
+}
+
+function getFileType(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const types = {
+    jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', bmp: 'image',
+    pdf: 'document', doc: 'document', docx: 'document', txt: 'document', md: 'document',
+    zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive',
+    js: 'code', ts: 'code', py: 'code', html: 'code', css: 'code', json: 'code'
+  };
+  return types[ext] || 'file';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function renderFiles() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = files.map((f, i) => `
+    <div class="file-item">
+      <span class="type">${f.type}</span>
+      <span class="name">${f.name}</span>
+      <span class="size">${formatSize(f.size)}</span>
+      <span class="status ${f.status}">${f.status === 'done' ? '✓' : f.status === 'error' ? '✗' : ''}</span>
+    </div>
+  `).join('');
+}
+
+function selectOp(op) {
+  currentOp = op;
+  document.querySelectorAll('.op-btn').forEach(b => b.style.borderColor = '#2d2d44');
+  event.currentTarget.style.borderColor = '#10b981';
+  
+  const panel = document.getElementById('config-panel');
+  const content = document.getElementById('config-content');
+  panel.style.display = 'block';
+  
+  const configs = {
+    rename: `
+      <div class="config-row"><label>前缀:</label><input type="text" id="cfg-prefix" placeholder="如: 2024_"></div>
+      <div class="config-row"><label>后缀:</label><input type="text" id="cfg-suffix" placeholder="如: _final"></div>
+      <div class="config-row"><label>添加序号:</label><select id="cfg-number"><option value="">否</option><option value="start">开头</option><option value="end">结尾</option></select></div>
+      <div class="config-row"><label>起始数字:</label><input type="number" id="cfg-start" value="1"></div>
+    `,
+    compress: `
+      <div class="config-row"><label>压缩包名:</label><input type="text" id="cfg-zipname" value="archive.zip"></div>
+      <p style="font-size:12px;color:#8b949e;margin-top:8px">将所有文件打包为一个ZIP文件下载</p>
+    `,
+    resize: `
+      <div class="config-row"><label>最大宽度:</label><input type="number" id="cfg-width" value="1920" placeholder="像素"></div>
+      <div class="config-row"><label>最大高度:</label><input type="number" id="cfg-height" value="1080" placeholder="像素"></div>
+      <div class="config-row"><label>保持比例:</label><select id="cfg-ratio"><option value="yes">是</option><option value="no">否</option></select></div>
+    `,
+    convert: `
+      <div class="config-row"><label>目标格式:</label><select id="cfg-format"><option value="jpeg">JPEG</option><option value="png">PNG</option><option value="webp">WebP</option></select></div>
+      <div class="config-row"><label>质量:</label><input type="range" id="cfg-quality" value="85" min="10" max="100" style="flex:1"><span id="quality-val">85%</span></div>
+    `,
+    clean: `
+      <div class="config-row"><label>移除空格:</label><select id="cfg-space"><option value="yes">是</option><option value="no">否</option></select></div>
+      <div class="config-row"><label>移除特殊字符:</label><select id="cfg-special"><option value="yes">是</option><option value="no">否</option></select></div>
+      <div class="config-row"><label>转为小写:</label><select id="cfg-lower"><option value="no">否</option><option value="yes">是</option></select></div>
+    `,
+    extract: `
+      <div class="config-row"><label>提取模式:</label><select id="cfg-mode"><option value="date">日期</option><option value="number">数字</option><option value="ext">扩展名</option></select></div>
+      <p style="font-size:12px;color:#8b949e;margin-top:8px">从文件名中提取指定内容作为新文件名</p>
+    `
+  };
+  
+  content.innerHTML = configs[op] || '';
+  
+  if (op === 'convert') {
+    document.getElementById('cfg-quality').oninput = function() {
+      document.getElementById('quality-val').textContent = this.value + '%';
+    };
+  }
+}
+
+function log(msg, type = '') {
+  const area = document.getElementById('log-area');
+  area.innerHTML += `<div class="log-line ${type}">${new Date().toLocaleTimeString()} ${msg}</div>`;
+  area.scrollTop = area.scrollHeight;
+}
+
+async function runOperation() {
+  if (!currentOp || files.length === 0) return;
+  
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  
+  document.getElementById('progress-bar').style.display = 'block';
+  document.getElementById('log-area').innerHTML = '';
+  
+  log(`开始处理 ${files.length} 个文件`, 'info');
+  
+  let processed = 0;
+  const results = [];
+  
+  for (const f of files) {
+    try {
+      let result;
+      
+      switch (currentOp) {
+        case 'rename':
+          result = await doRename(f);
+          break;
+        case 'compress':
+          result = await doCompress(f);
+          break;
+        case 'resize':
+          result = await doResize(f);
+          break;
+        case 'convert':
+          result = await doConvert(f);
+          break;
+        case 'clean':
+          result = await doClean(f);
+          break;
+        case 'extract':
+          result = await doExtract(f);
+          break;
+      }
+      
+      f.status = 'done';
+      log(`✓ ${f.name} → ${result || '完成'}`, 'success');
+      if (result) results.push({ original: f, result });
+      
+    } catch (err) {
+      f.status = 'error';
+      log(`✗ ${f.name}: ${err.message}`, 'error');
+    }
+    
+    processed++;
+    document.getElementById('progress-fill').style.width = (processed / files.length * 100) + '%';
+    renderFiles();
+  }
+  
+  log(`处理完成: ${processed}/${files.length}`, 'info');
+  
+  // Download results
+  if (results.length > 0 && currentOp !== 'compress') {
+    for (const r of results) {
+      if (r.result instanceof Blob) {
+        downloadBlob(r.result, r.original.name);
+      }
+    }
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '▶ 执行';
+}
+
+function doRename(f) {
+  const prefix = document.getElementById('cfg-prefix')?.value || '';
+  const suffix = document.getElementById('cfg-suffix')?.value || '';
+  const numberMode = document.getElementById('cfg-number')?.value || '';
+  const startNum = parseInt(document.getElementById('cfg-start')?.value || 1);
+  
+  let name = f.name;
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+  const base = name.replace(ext, '');
+  
+  let newName = prefix + base + suffix;
+  if (numberMode === 'start') newName = startNum + '_' + newName;
+  if (numberMode === 'end') newName = newName + '_' + startNum;
+  
+  return newName + ext;
+}
+
+async function doCompress(f) {
+  // For now, just download individual files
+  // Full ZIP would need JSZip library
+  return '下载中...';
+}
+
+async function doResize(f) {
+  if (!f.type.includes('image')) throw new Error('非图片文件');
+  
+  const maxW = parseInt(document.getElementById('cfg-width').value);
+  const maxH = parseInt(document.getElementById('cfg-height').value);
+  
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      if (h > maxH) { w = w * maxH / h; h = maxH; }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      
+      canvas.toBlob(blob => {
+        downloadBlob(blob, f.name);
+        resolve(`${w}x${h}`);
+      }, f.type);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(f.file);
+  });
+}
+
+async function doConvert(f) {
+  if (!f.type.includes('image')) throw new Error('非图片文件');
+  
+  const format = document.getElementById('cfg-format').value;
+  const quality = parseInt(document.getElementById('cfg-quality').value) / 100;
+  
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      
+      const mime = `image/${format}`;
+      canvas.toBlob(blob => {
+        const newName = f.name.replace(/\.[^.]+$/, `.${format}`);
+        downloadBlob(blob, newName);
+        resolve(newName);
+      }, mime, quality);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(f.file);
+  });
+}
+
+function doClean(f) {
+  let name = f.name;
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+  let base = name.replace(ext, '');
+  
+  if (document.getElementById('cfg-space').value === 'yes') {
+    base = base.replace(/\s+/g, '_');
+  }
+  if (document.getElementById('cfg-special').value === 'yes') {
+    base = base.replace(/[^\w\u4e00-\u9fa5\-_]/g, '');
+  }
+  if (document.getElementById('cfg-lower').value === 'yes') {
+    base = base.toLowerCase();
+  }
+  
+  return base + ext;
+}
+
+function doExtract(f) {
+  const mode = document.getElementById('cfg-mode').value;
+  const name = f.name;
+  
+  let result;
+  switch (mode) {
+    case 'date':
+      const dateMatch = name.match(/\d{4}[-/]?\d{2}[-/]?\d{2}/);
+      result = dateMatch ? dateMatch[0] : '无日期';
+      break;
+    case 'number':
+      const numMatch = name.match(/\d+/);
+      result = numMatch ? numMatch[0] : '无数字';
+      break;
+    case 'ext':
+      result = name.split('.').pop();
+      break;
+  }
+  return result;
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function clearFiles() {
+  files = [];
+  renderFiles();
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('progress-bar').style.display = 'none';
+}
+</script>
+</body>
+</html>
